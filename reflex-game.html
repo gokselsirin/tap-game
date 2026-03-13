@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>TAP · Refleks Oyunu</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;700;800&display=swap');
+
+  :root {
+    --bg: #f5f4f0;
+    --ink: #0f0f0d;
+    --accent: #e8441a;
+    --faint: #e0dfd8;
+    --mid: #9e9b91;
+    --green: #2d8a5e;
+    --gold: #c8963e;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'DM Mono', monospace;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    touch-action: manipulation;
+    user-select: none;
+  }
+
+  /* ─── SCREENS ─── */
+  .screen { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity .3s; }
+  .screen.hidden { opacity: 0; pointer-events: none; }
+
+  /* ─── HOME ─── */
+  #home {
+    gap: 0;
+    background: var(--bg);
+  }
+  .logo-wrap {
+    display: flex; flex-direction: column; align-items: center;
+    margin-bottom: 60px;
+  }
+  .logo {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(72px, 20vw, 120px);
+    font-weight: 800;
+    letter-spacing: -4px;
+    line-height: 1;
+    color: var(--ink);
+  }
+  .logo-sub {
+    font-size: 11px;
+    letter-spacing: 4px;
+    color: var(--mid);
+    text-transform: uppercase;
+    margin-top: 8px;
+  }
+
+  .best-score-home {
+    font-size: 12px;
+    letter-spacing: 2px;
+    color: var(--mid);
+    margin-bottom: 40px;
+    text-transform: uppercase;
+  }
+  .best-score-home span { color: var(--ink); font-weight: 500; }
+
+  .btn-start {
+    background: var(--ink);
+    color: var(--bg);
+    border: none;
+    font-family: 'DM Mono', monospace;
+    font-size: 14px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    padding: 18px 48px;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: transform .1s, background .1s;
+  }
+  .btn-start:active { transform: scale(.97); background: var(--accent); }
+
+  /* ─── GAME ─── */
+  #game { background: var(--bg); }
+
+  .hud {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    padding: 24px 28px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+  .hud-label { font-size: 10px; letter-spacing: 2px; color: var(--mid); text-transform: uppercase; margin-bottom: 4px; }
+  .hud-val {
+    font-family: 'Syne', sans-serif;
+    font-size: 36px;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--ink);
+    transition: color .15s;
+  }
+  .hud-val.flash { color: var(--accent); }
+
+  .hud-right { text-align: right; }
+  .combo-val {
+    font-family: 'Syne', sans-serif;
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--gold);
+    opacity: 0;
+    transition: opacity .2s;
+  }
+  .combo-val.show { opacity: 1; }
+
+  /* Target ring */
+  .arena {
+    position: relative;
+    width: min(80vw, 340px);
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .ring-outer {
+    position: absolute;
+    border-radius: 50%;
+    border: 1.5px solid var(--faint);
+    width: 100%; height: 100%;
+  }
+
+  .ring-progress {
+    position: absolute;
+    width: 100%; height: 100%;
+    border-radius: 50%;
+  }
+
+  .ring-progress svg {
+    width: 100%; height: 100%;
+    transform: rotate(-90deg);
+  }
+
+  .ring-progress circle {
+    fill: none;
+    stroke: var(--ink);
+    stroke-width: 2;
+    stroke-linecap: round;
+    transition: stroke .2s;
+  }
+
+  .tap-zone {
+    position: relative;
+    width: 52%;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: var(--ink);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform .08s, background .15s;
+    box-shadow: 0 8px 32px rgba(0,0,0,.12);
+  }
+  .tap-zone:active, .tap-zone.pressed { transform: scale(.92); }
+  .tap-zone.perfect { background: var(--green) !important; }
+  .tap-zone.good { background: var(--gold) !important; }
+  .tap-zone.miss { background: var(--accent) !important; }
+
+  .tap-label {
+    font-family: 'Syne', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    color: var(--bg);
+    text-transform: uppercase;
+    pointer-events: none;
+  }
+
+  /* Timing indicator arc */
+  .timing-ring {
+    position: absolute;
+    width: 60%;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    transition: border-color .15s;
+    pointer-events: none;
+  }
+
+  /* Feedback popup */
+  .feedback {
+    position: absolute;
+    top: 28%;
+    font-family: 'Syne', sans-serif;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    opacity: 0;
+    transform: translateY(0);
+    pointer-events: none;
+    transition: none;
+  }
+  .feedback.pop {
+    animation: feedpop .5s ease-out forwards;
+  }
+  @keyframes feedpop {
+    0%   { opacity: 1; transform: translateY(0) scale(1); }
+    60%  { opacity: 1; transform: translateY(-24px) scale(1.1); }
+    100% { opacity: 0; transform: translateY(-36px) scale(.9); }
+  }
+
+  /* Speed indicator */
+  .speed-bar {
+    position: absolute;
+    bottom: 130px;
+    left: 28px; right: 28px;
+    height: 2px;
+    background: var(--faint);
+    border-radius: 1px;
+  }
+  .speed-fill {
+    height: 100%;
+    background: var(--ink);
+    border-radius: 1px;
+    width: 0%;
+    transition: width .3s, background .3s;
+  }
+  .speed-label {
+    position: absolute;
+    bottom: 108px;
+    left: 28px;
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: var(--mid);
+    text-transform: uppercase;
+  }
+
+  /* Lives */
+  .lives {
+    position: absolute;
+    bottom: 60px;
+    display: flex;
+    gap: 12px;
+  }
+  .life {
+    width: 8px; height: 8px;
+    background: var(--ink);
+    border-radius: 50%;
+    transition: background .2s, transform .2s;
+  }
+  .life.lost { background: var(--faint); transform: scale(.7); }
+
+  /* ─── GAME OVER ─── */
+  #gameover { background: var(--bg); gap: 0; }
+
+  .go-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 5px;
+    text-transform: uppercase;
+    color: var(--mid);
+    margin-bottom: 32px;
+  }
+  .go-score {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(80px, 22vw, 130px);
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -4px;
+    color: var(--ink);
+  }
+  .go-score-label {
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--mid);
+    margin-top: 4px;
+    margin-bottom: 40px;
+  }
+
+  .go-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0;
+    width: min(80vw, 320px);
+    border-top: 1px solid var(--faint);
+    border-bottom: 1px solid var(--faint);
+    margin-bottom: 48px;
+  }
+  .stat-cell {
+    padding: 20px 16px;
+    text-align: center;
+    border-right: 1px solid var(--faint);
+  }
+  .stat-cell:last-child { border-right: none; }
+  .stat-val {
+    font-family: 'Syne', sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+  .stat-lbl { font-size: 9px; letter-spacing: 2px; color: var(--mid); text-transform: uppercase; margin-top: 4px; }
+
+  .new-best {
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 32px;
+    opacity: 0;
+    transition: opacity .4s .4s;
+  }
+  .new-best.show { opacity: 1; }
+
+  .go-btns { display: flex; gap: 12px; }
+  .btn-retry {
+    background: var(--ink);
+    color: var(--bg);
+    border: none;
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 16px 36px;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: transform .1s;
+  }
+  .btn-retry:active { transform: scale(.97); }
+  .btn-home {
+    background: transparent;
+    color: var(--ink);
+    border: 1.5px solid var(--faint);
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 16px 24px;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: transform .1s;
+  }
+  .btn-home:active { transform: scale(.97); }
+
+  /* countdown */
+  .countdown {
+    font-family: 'Syne', sans-serif;
+    font-size: 80px;
+    font-weight: 800;
+    color: var(--ink);
+    opacity: 0;
+    transition: opacity .1s;
+    position: absolute;
+  }
+  .countdown.show { opacity: 1; animation: countpulse .4s ease-out; }
+  @keyframes countpulse { 0%{transform:scale(1.4)} 100%{transform:scale(1)} }
+</style>
+</head>
+<body>
+
+<!-- HOME -->
+<div class="screen" id="home">
+  <div class="logo-wrap">
+    <div class="logo">TAP</div>
+    <div class="logo-sub">Refleks · Zamanlama · Rekabet</div>
+  </div>
+  <div class="best-score-home">En İyi: <span id="homeHiScore">0</span></div>
+  <button class="btn-start" id="btnStart">BAŞLA</button>
+</div>
+
+<!-- GAME -->
+<div class="screen hidden" id="game">
+  <div class="hud">
+    <div>
+      <div class="hud-label">Skor</div>
+      <div class="hud-val" id="scoreDisplay">0</div>
+    </div>
+    <div class="hud-right">
+      <div class="hud-label">En İyi</div>
+      <div class="hud-val" id="hiDisplay">0</div>
+      <div class="combo-val" id="comboDisplay">×3 COMBO</div>
+    </div>
+  </div>
+
+  <div class="countdown" id="countdown"></div>
+
+  <div class="arena" id="arena">
+    <div class="ring-outer"></div>
+    <div class="ring-progress">
+      <svg viewBox="0 0 100 100">
+        <circle id="progressCircle" cx="50" cy="50" r="47" stroke-dasharray="295.3" stroke-dashoffset="0"/>
+      </svg>
+    </div>
+    <div class="tap-zone" id="tapZone">
+      <div class="tap-label">TAP</div>
+    </div>
+    <div class="feedback" id="feedback"></div>
+  </div>
+
+  <div class="speed-bar">
+    <div class="speed-fill" id="speedFill"></div>
+  </div>
+  <div class="speed-label" id="speedLabel">Hız: Başlangıç</div>
+
+  <div class="lives" id="lives">
+    <div class="life" id="l0"></div>
+    <div class="life" id="l1"></div>
+    <div class="life" id="l2"></div>
+  </div>
+</div>
+
+<!-- GAME OVER -->
+<div class="screen hidden" id="gameover">
+  <div class="go-title">Oyun Bitti</div>
+  <div class="go-score" id="goScore">0</div>
+  <div class="go-score-label">Puan</div>
+  <div class="go-stats">
+    <div class="stat-cell">
+      <div class="stat-val" id="statPerfect">0</div>
+      <div class="stat-lbl">Mükemmel</div>
+    </div>
+    <div class="stat-cell">
+      <div class="stat-val" id="statCombo">0</div>
+      <div class="stat-lbl">Max Combo</div>
+    </div>
+    <div class="stat-cell">
+      <div class="stat-val" id="statTaps">0</div>
+      <div class="stat-lbl">Toplam</div>
+    </div>
+  </div>
+  <div class="new-best" id="newBest">★ YENİ REKOR ★</div>
+  <div class="go-btns">
+    <button class="btn-retry" id="btnRetry">TEKRAR</button>
+    <button class="btn-home" id="btnHome">ANA MENÜ</button>
+  </div>
+</div>
+
+<script>
+  // ── State
+  let hiScore = parseInt(localStorage.getItem('tap_hi') || '0');
+  let score, lives, combo, maxCombo, perfectCount, totalTaps;
+  let windowStart, windowDur, windowTimer, cycleTimer;
+  let gameActive = false;
+  let level = 1;
+  let countdownVal = 3;
+
+  // ── Refs
+  const homeScreen  = document.getElementById('home');
+  const gameScreen  = document.getElementById('game');
+  const goScreen    = document.getElementById('gameover');
+  const scoreEl     = document.getElementById('scoreDisplay');
+  const hiEl        = document.getElementById('hiDisplay');
+  const comboEl     = document.getElementById('comboDisplay');
+  const tapZone     = document.getElementById('tapZone');
+  const feedback    = document.getElementById('feedback');
+  const progressCircle = document.getElementById('progressCircle');
+  const speedFill   = document.getElementById('speedFill');
+  const speedLabel  = document.getElementById('speedLabel');
+  const countdownEl = document.getElementById('countdown');
+  const goScoreEl   = document.getElementById('goScore');
+  const newBestEl   = document.getElementById('newBest');
+
+  const CIRCUM = 295.3; // 2π×47
+
+  // ── Helpers
+  function show(el) { el.classList.remove('hidden'); }
+  function hide(el) { el.classList.add('hidden'); }
+  function updateHiScore() {
+    document.getElementById('homeHiScore').textContent = hiScore;
+    hiEl.textContent = hiScore;
+  }
+
+  // Level config
+  function levelConfig(lvl) {
+    // windowDur ms to tap in, cycleDur ms total cycle
+    const base = Math.max(2800 - lvl * 140, 900);
+    const cycle = Math.max(3400 - lvl * 160, 1100);
+    return { windowDur: base, cycleDur: cycle };
+  }
+
+  function getSpeedLabel(lvl) {
+    if (lvl <= 2) return 'Başlangıç';
+    if (lvl <= 5) return 'Hızlanıyor';
+    if (lvl <= 9) return 'Hızlı';
+    if (lvl <= 14) return 'Çılgın';
+    return 'İNSANÜSTÜ';
+  }
+
+  // ── Game flow
+  function initGame() {
+    score = 0; lives = 3; combo = 0; maxCombo = 0;
+    perfectCount = 0; totalTaps = 0; level = 1;
+    gameActive = false;
+    scoreEl.textContent = '0';
+    hiEl.textContent = hiScore;
+    comboEl.classList.remove('show');
+    updateLives();
+    progressCircle.style.strokeDashoffset = CIRCUM;
+    progressCircle.style.stroke = 'var(--ink)';
+    speedFill.style.width = '0%';
+    speedLabel.textContent = 'Hız: Başlangıç';
+    tapZone.style.background = 'var(--ink)';
+  }
+
+  function startCountdown() {
+    show(gameScreen); hide(homeScreen); hide(goScreen);
+    initGame();
+    countdownVal = 3;
+    countdownEl.textContent = countdownVal;
+    countdownEl.classList.add('show');
+    const tick = setInterval(() => {
+      countdownVal--;
+      if (countdownVal <= 0) {
+        clearInterval(tick);
+        countdownEl.classList.remove('show');
+        gameActive = true;
+        scheduleNext(200);
+      } else {
+        countdownEl.textContent = countdownVal;
+        countdownEl.classList.remove('show');
+        requestAnimationFrame(() => requestAnimationFrame(() => countdownEl.classList.add('show')));
+      }
+    }, 800);
+  }
+
+  let animFrame;
+  let windowEndTime;
+
+  function scheduleNext(delay) {
+    clearTimeout(cycleTimer);
+    const cfg = levelConfig(level);
+    cycleTimer = setTimeout(() => {
+      if (!gameActive) return;
+      startWindow(cfg.windowDur, cfg.cycleDur);
+    }, delay);
+  }
+
+  function startWindow(wDur, cDur) {
+    if (!gameActive) return;
+    windowDur = wDur;
+    windowEndTime = performance.now() + wDur;
+    progressCircle.style.strokeDashoffset = '0';
+    progressCircle.style.transition = 'none';
+
+    // Animate progress ring shrinking
+    cancelAnimationFrame(animFrame);
+    const animate = (now) => {
+      const rem = windowEndTime - now;
+      if (rem <= 0) {
+        // missed!
+        progressCircle.style.strokeDashoffset = CIRCUM;
+        onMiss();
+        return;
+      }
+      const frac = rem / wDur;
+      progressCircle.style.strokeDashoffset = (1 - frac) * CIRCUM;
+      // Color urgency
+      if (frac < 0.25) progressCircle.style.stroke = 'var(--accent)';
+      else if (frac < 0.5) progressCircle.style.stroke = 'var(--gold)';
+      else progressCircle.style.stroke = 'var(--ink)';
+      animFrame = requestAnimationFrame(animate);
+    };
+    animFrame = requestAnimationFrame(animate);
+
+    // Miss timeout fallback
+    windowTimer = setTimeout(() => {
+      cancelAnimationFrame(animFrame);
+      onMiss();
+    }, wDur);
+  }
+
+  function onTap() {
+    if (!gameActive) return;
+    totalTaps++;
+    clearTimeout(windowTimer);
+    cancelAnimationFrame(animFrame);
+
+    const now = performance.now();
+    const rem = windowEndTime - now;
+    const frac = rem / windowDur; // 1=just started, 0=about to expire
+
+    let pts, label, colorClass;
+    if (frac >= 0.55) {
+      // Tapped very early or mid — score by accuracy of timing
+      // Best tap window: 0.35–0.65 remaining
+      pts = 10; label = 'ERKEN'; colorClass = '';
+    } else if (frac >= 0.25) {
+      pts = 25; label = 'GÜZEL!'; colorClass = 'good'; perfectCount++;
+    } else if (frac >= 0.08) {
+      pts = 50; label = 'MÜKEMMEL!'; colorClass = 'perfect'; perfectCount++;
+    } else {
+      pts = 35; label = 'GEÇ'; colorClass = '';
+    }
+
+    combo++;
+    if (combo > maxCombo) maxCombo = combo;
+
+    // Combo multiplier
+    const mult = combo >= 10 ? 4 : combo >= 5 ? 3 : combo >= 3 ? 2 : 1;
+    if (mult > 1) {
+      pts *= mult;
+      comboEl.textContent = `×${mult} COMBO`;
+      comboEl.classList.add('show');
+    } else {
+      comboEl.classList.remove('show');
+    }
+
+    score += pts;
+    if (score > hiScore) hiScore = score;
+    updateHiScore();
+    scoreEl.textContent = score;
+    scoreEl.classList.add('flash');
+    setTimeout(() => scoreEl.classList.remove('flash'), 200);
+
+    // Visual feedback
+    tapZone.classList.add(colorClass || 'pressed');
+    progressCircle.style.strokeDashoffset = CIRCUM;
+    showFeedback(label, colorClass === 'perfect' ? 'var(--green)' : colorClass === 'good' ? 'var(--gold)' : 'var(--mid)');
+
+    setTimeout(() => {
+      tapZone.classList.remove('perfect', 'good', 'miss', 'pressed');
+      tapZone.style.background = '';
+    }, 200);
+
+    // Level up every 5 taps
+    level = Math.floor(totalTaps / 5) + 1;
+    updateSpeedUI();
+
+    scheduleNext(300);
+  }
+
+  function onMiss() {
+    if (!gameActive) return;
+    combo = 0;
+    comboEl.classList.remove('show');
+    loseLife();
+    showFeedback('KAÇIRDIN', 'var(--accent)');
+    tapZone.classList.add('miss');
+    setTimeout(() => { tapZone.classList.remove('miss'); tapZone.style.background = ''; }, 300);
+    if (gameActive) scheduleNext(400);
+  }
+
+  function loseLife() {
+    lives--;
+    updateLives();
+    if (lives <= 0) endGame();
+  }
+
+  function updateLives() {
+    for (let i = 0; i < 3; i++) {
+      document.getElementById('l' + i).classList.toggle('lost', i >= lives);
+    }
+  }
+
+  function updateSpeedUI() {
+    const pct = Math.min((level - 1) / 20 * 100, 100);
+    speedFill.style.width = pct + '%';
+    speedFill.style.background = pct > 70 ? 'var(--accent)' : pct > 40 ? 'var(--gold)' : 'var(--ink)';
+    speedLabel.textContent = 'Hız: ' + getSpeedLabel(level);
+  }
+
+  function showFeedback(text, color) {
+    feedback.textContent = text;
+    feedback.style.color = color;
+    feedback.classList.remove('pop');
+    void feedback.offsetWidth;
+    feedback.classList.add('pop');
+  }
+
+  function endGame() {
+    gameActive = false;
+    clearTimeout(windowTimer);
+    clearTimeout(cycleTimer);
+    cancelAnimationFrame(animFrame);
+
+    const isNew = score > parseInt(localStorage.getItem('tap_hi') || '0');
+    if (isNew) localStorage.setItem('tap_hi', hiScore);
+
+    setTimeout(() => {
+      hide(gameScreen);
+      show(goScreen);
+      goScoreEl.textContent = score;
+      document.getElementById('statPerfect').textContent = perfectCount;
+      document.getElementById('statCombo').textContent = maxCombo;
+      document.getElementById('statTaps').textContent = totalTaps;
+      if (isNew) {
+        newBestEl.classList.add('show');
+      } else {
+        newBestEl.classList.remove('show');
+      }
+    }, 500);
+  }
+
+  // ── Event listeners
+  tapZone.addEventListener('pointerdown', (e) => { e.preventDefault(); onTap(); });
+  document.getElementById('btnStart').addEventListener('click', startCountdown);
+  document.getElementById('btnRetry').addEventListener('click', startCountdown);
+  document.getElementById('btnHome').addEventListener('click', () => {
+    hide(goScreen); hide(gameScreen); show(homeScreen);
+    updateHiScore();
+  });
+
+  // Init
+  updateHiScore();
+</script>
+</body>
+</html>
